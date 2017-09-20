@@ -10,10 +10,9 @@ import android.support.v7.app.AppCompatActivity;
 import android.view.MenuItem;
 import android.widget.Toast;
 
-import org.md2k.beacon.bluetooth.MyBlueTooth;
-import org.md2k.datakitapi.messagehandler.ResultCallback;
-import org.md2k.utilities.Apps;
-import org.md2k.utilities.permission.PermissionInfo;
+import org.md2k.mcerebrum.commons.permission.Permission;
+
+import es.dmoral.toasty.Toasty;
 
 /**
  * Copyright (c) 2015, The University of Memphis, MD2K Center
@@ -43,52 +42,31 @@ import org.md2k.utilities.permission.PermissionInfo;
  */
 
 public class ActivitySettings extends AppCompatActivity {
-    private static final int REQUEST_ENABLE_BT = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (Apps.isServiceRunning(getBaseContext(), "org.md2k.beacon.ServiceMotionSense")) {
-            Intent intent = new Intent(this, ServiceBeacon.class);
-            stopService(intent);
-        }
         setContentView(R.layout.activity_settings);
-        PermissionInfo permissionInfo = new PermissionInfo();
-        permissionInfo.getPermissions(this, new ResultCallback<Boolean>() {
-            @Override
-            public void onResult(Boolean result) {
-                if (!result) {
-                    Toast.makeText(getApplicationContext(), "!PERMISSION DENIED !!! Could not continue...", Toast.LENGTH_SHORT).show();
-                    finish();
-                } else {
-                    checkBluetooth();
-                }
-            }
-        });
+        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if(!mBluetoothAdapter.isEnabled())
+            mBluetoothAdapter.enable();
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         registerReceiver(mReceiver, filter);
+
+        Permission.requestPermission(this, isGranted -> {
+            if (!isGranted) {
+                Toast.makeText(getApplicationContext(), "!PERMISSION DENIED !!! Could not continue...", Toast.LENGTH_SHORT).show();
+                finish();
+            } else {
+                getFragmentManager().beginTransaction().replace(R.id.layout_preference_fragment,
+                        new PrefsFragmentSettings()).commit();
+            }
+
+        });
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayShowTitleEnabled(true);
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
-    }
-    void checkBluetooth(){
-        if(!MyBlueTooth.isSupported()) {
-            Toast.makeText(this, "Bluetooth LE is not supported",Toast.LENGTH_LONG).show();
-            finish();
-        }
-        else if(MyBlueTooth.isEnabled()){
-            prepareUI();
-        }
-        else{
-            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-
-        }
-    }
-    void prepareUI(){
-        getFragmentManager().beginTransaction().replace(R.id.layout_preference_fragment,
-                new PrefsFragmentSettings()).commit();
     }
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
@@ -99,16 +77,6 @@ public class ActivitySettings extends AppCompatActivity {
         }
         return super.onOptionsItemSelected(item);
     }
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
-        System.out.println(resultCode);
-        if(requestCode==REQUEST_ENABLE_BT && resultCode==RESULT_OK){
-            prepareUI();
-        }else{
-            Toast.makeText(this, "Bluetooth LE is not enabled",Toast.LENGTH_LONG).show();
-            finish();
-        }
-    }
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -117,30 +85,17 @@ public class ActivitySettings extends AppCompatActivity {
             if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
                 final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE,
                         BluetoothAdapter.ERROR);
-                switch (state) {
+                switch(state){
                     case BluetoothAdapter.STATE_OFF:
-                        Toast.makeText(context, "Bluetooth LE is not enabled",Toast.LENGTH_LONG).show();
-                        finish();
-                        break;
                     case BluetoothAdapter.STATE_TURNING_OFF:
-                        Toast.makeText(context, "Bluetooth LE is not enabled",Toast.LENGTH_LONG).show();
-                        finish();
-                        break;
-                    case BluetoothAdapter.STATE_ON:
-                        break;
-                    case BluetoothAdapter.STATE_TURNING_ON:
-                        break;
+                        Toasty.error(ActivitySettings.this, "Bluetooth is off. Please turn on bluetooth", Toast.LENGTH_SHORT).show();
                 }
             }
         }
     };
     @Override
     public void onDestroy() {
-        super.onDestroy();
-
-    /* ... */
-
-        // Unregister broadcast listeners
         unregisterReceiver(mReceiver);
+        super.onDestroy();
     }
 }

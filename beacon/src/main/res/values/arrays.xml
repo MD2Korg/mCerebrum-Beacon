@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="beacon_entries">
+        <item>Home</item>
+        <item>Office</item>
+        <item>Car</item>
+        <item>Other</item>
+    </string-array>
+    <string-array name="beacon_entryValues">
+        <item>HOME</item>
+        <item>OFFICE</item>
+        <item>CAR</item>
+        <item>OTHER</item>
+    </string-array>
+</resources>

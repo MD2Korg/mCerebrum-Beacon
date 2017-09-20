@@ -1,10 +1,10 @@
 package org.md2k.beacon;
 
+import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.content.ContextCompat;
@@ -18,14 +18,14 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.md2k.datakitapi.messagehandler.ResultCallback;
 import org.md2k.datakitapi.time.DateTime;
-import org.md2k.utilities.Apps;
-import org.md2k.utilities.UI.ActivityAbout;
-import org.md2k.utilities.UI.ActivityCopyright;
-import org.md2k.utilities.permission.PermissionInfo;
+import org.md2k.mcerebrum.commons.app_info.AppInfo;
+import org.md2k.mcerebrum.commons.permission.Permission;
+import org.md2k.mcerebrum.commons.permission.PermissionCallback;
 
 import java.util.ArrayList;
+
+import es.dmoral.toasty.Toasty;
 
 
 /**
@@ -59,32 +59,63 @@ public class ActivityMain extends AppCompatActivity {
     private static final String TAG = ActivityMain.class.getSimpleName();
     public static final String INTENT_NAME="beacon_data";
 
+    public static final int OPERATION_RUN = 0;
+    public static final int OPERATION_SETTINGS = 1;
+    public static final int OPERATION_PLOT = 2;
+    public static final int OPERATION_START_BACKGROUND = 3;
+    public static final int OPERATION_STOP_BACKGROUND = 4;
+    public static final String OPERATION = "operation";
+
+    boolean isEverythingOk = false;
+    int operation;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        setContentView(R.layout.activity_main);
-        PermissionInfo permissionInfo = new PermissionInfo();
-        permissionInfo.getPermissions(this, new ResultCallback<Boolean>() {
-            @Override
-            public void onResult(Boolean result) {
-                if (!result) {
-                    Toast.makeText(getApplicationContext(), "!PERMISSION DENIED !!! Could not continue...", Toast.LENGTH_SHORT).show();
-                    finish();
-                } else {
-                    load();
-                }
-            }
-        });
+        readIntent();
+        checkRequirement();
     }
-    void load(){
+
+    void load() {
+        isEverythingOk = true;
+        Intent intent;
+        switch (operation) {
+            case OPERATION_RUN:
+                initializeUI();
+                break;
+            case OPERATION_START_BACKGROUND:
+                intent = new Intent(ActivityMain.this, ServiceBeacon.class);
+                startService(intent);
+                finish();
+                break;
+            case OPERATION_STOP_BACKGROUND:
+                intent = new Intent(ActivityMain.this, ServiceBeacon.class);
+                stopService(intent);
+                finish();
+                break;
+            case OPERATION_PLOT:
+                break;
+            case OPERATION_SETTINGS:
+                intent = new Intent(this, ActivitySettings.class);
+                startActivity(intent);
+                finish();
+                break;
+            default:
+//                Toasty.error(getApplicationContext(), "Invalid argument. Operation = " + operation, Toast.LENGTH_SHORT).show();
+                initializeUI();
+        }
+    }
+    void initializeUI() {
+        setContentView(R.layout.activity_main);
+        if (getSupportActionBar() != null)
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         final Button buttonService = (Button) findViewById(R.id.button_app_status);
         buttonService.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent intent = new Intent(ActivityMain.this, ServiceBeacon.class);
-                if (Apps.isServiceRunning(getBaseContext(), Constants.SERVICE_NAME)) {
-//                if (!"START".equals(buttonService.getText())) {
+                Intent intent = new Intent(getApplicationContext(), ServiceBeacon.class);
+                if (AppInfo.isServiceRunning(getBaseContext(), ServiceBeacon.class.getName())) {
                     stopService(intent);
                 } else {
                     startService(intent);
@@ -92,15 +123,13 @@ public class ActivityMain extends AppCompatActivity {
             }
         });
 
-        if (getSupportActionBar() != null)
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
     }
     private Handler mHandler = new Handler();
     private Runnable runnable = new Runnable() {
         @Override
         public void run() {
             {
-                long time = Apps.serviceRunningTime(ActivityMain.this, Constants.SERVICE_NAME);
+                long time = AppInfo.serviceRunningTime(ActivityMain.this, Constants.SERVICE_NAME);
                 if (time < 0) {
                     ((Button) findViewById(R.id.button_app_status)).setText("START");
                     findViewById(R.id.button_app_status).setBackground(ContextCompat.getDrawable(ActivityMain.this, R.drawable.button_status_off));
@@ -132,16 +161,20 @@ public class ActivityMain extends AppCompatActivity {
     }
     @Override
     public void onResume() {
-        LocalBroadcastManager.getInstance(this).registerReceiver(mMessageReceiver,
-                new IntentFilter(INTENT_NAME));
-        mHandler.post(runnable);
+        if (isEverythingOk) {
+            LocalBroadcastManager.getInstance(this).registerReceiver(mMessageReceiver,
+                    new IntentFilter(INTENT_NAME));
+            mHandler.post(runnable);
+        }
         super.onResume();
     }
 
     @Override
     public void onPause() {
-        mHandler.removeCallbacks(runnable);
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(mMessageReceiver);
+        if (isEverythingOk) {
+            mHandler.removeCallbacks(runnable);
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(mMessageReceiver);
+        }
         super.onPause();
     }
 
@@ -174,22 +207,56 @@ public class ActivityMain extends AppCompatActivity {
                 intent = new Intent(this, ActivitySettings.class);
                 startActivity(intent);
                 break;
-            case R.id.action_about:
-                intent = new Intent(this, ActivityAbout.class);
-                try {
-                    intent.putExtra(org.md2k.utilities.Constants.VERSION_CODE, String.valueOf(this.getPackageManager().getPackageInfo(getPackageName(), 0).versionCode));
-                    intent.putExtra(org.md2k.utilities.Constants.VERSION_NAME, this.getPackageManager().getPackageInfo(getPackageName(), 0).versionName);
-                } catch (PackageManager.NameNotFoundException e) {
-                    e.printStackTrace();
-                }
-                startActivity(intent);
-                break;
-            case R.id.action_copyright:
-                intent = new Intent(this, ActivityCopyright.class);
-                startActivity(intent);
-                break;
         }
         return super.onOptionsItemSelected(item);
     }
+    private void checkRequirement() {
+        Intent intent = new Intent(this, ActivityPermission.class);
+        startActivityForResult(intent, 1111);
+    }
 
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == 1111) {
+            if (resultCode != RESULT_OK) {
+                finish();
+            } else {
+                load();
+            }
+        }
+    }
+
+    void readIntent() {
+        if(getIntent().getExtras()!=null) {
+            operation = getIntent().getExtras().getInt(OPERATION, 0);
+        }else operation=0;
+    }
+ /*
+        Permission.requestPermission(this, new PermissionCallback() {
+            @Override
+            public void OnResponse(boolean isGranted) {
+                if (!isGranted) {
+                    Toasty.error(getApplicationContext(), "!PERMISSION DENIED !!! Could not continue...", Toast.LENGTH_SHORT).show();
+                    finish();
+                } else {
+                    if(getIntent().hasExtra("RUN") && getIntent().getBooleanExtra("RUN", false)) {
+                        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+                        if (!mBluetoothAdapter.isEnabled())
+                            mBluetoothAdapter.enable();
+                        Intent intent = new Intent(ActivityMain.this, ServiceBeacon.class);
+                        startService(intent);
+                        finish();
+                    }else if(getIntent().hasExtra("PERMISSION") && getIntent().getBooleanExtra("PERMISSION", false)) {
+                        finish();
+                    } else {
+                        setContentView(R.layout.activity_main);
+                        load();
+                    }
+                }
+            }
+        });
+
+    }
+
+     */
 }
