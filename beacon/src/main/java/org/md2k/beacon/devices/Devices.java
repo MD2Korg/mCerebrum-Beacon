@@ -147,6 +147,7 @@ public class Devices {
         for (int i = 0; i < devices.size(); i++) {
             devices.get(i).unregister();
         }
+        devices.clear();
     }
 
     public void insert(String adr, DataTypeDoubleArray dataTypeDoubleArray) throws DataKitException {

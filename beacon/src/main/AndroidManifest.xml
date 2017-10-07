@@ -2,12 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="org.md2k.beacon">
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/app_theme_teal_light"
         tools:replace="android:theme">
@@ -25,27 +29,20 @@
             android:label="Settings"
             android:screenOrientation="portrait">
             <intent-filter>
-                <action android:name="org.md2k.motionsense.ActivitySettings" />
+                <action android:name="org.md2k.beacon.ActivitySettings" />
             </intent-filter>
             >
         </activity>
-        <activity
-            android:name="org.md2k.utilities.permission.ActivityPermission"
+        <activity android:name=".ActivityPermission" />
+        <service
+            android:name=".ServiceMCerebrum"
             android:enabled="true"
-            android:exported="true"
-            android:label="Permission"
-            android:screenOrientation="portrait" />
-        <activity
-            android:name="org.md2k.beacon.ActivitySettingsPlatform"
-            android:enabled="true"
-            android:exported="true"
-            android:label="Settings: MotionSense"
-            android:screenOrientation="portrait" />
+            android:exported="true"></service>
 
         <service
             android:name=".ServiceBeacon"
             android:enabled="true"
-            android:exported="true"></service>
+            android:exported="true" />
     </application>
 
 </manifest>
