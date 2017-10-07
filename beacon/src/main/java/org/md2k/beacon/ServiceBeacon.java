@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.support.v4.content.LocalBroadcastManager;
+import android.util.Log;
 import android.widget.Toast;
 
 import org.altbeacon.beacon.Beacon;
@@ -28,6 +29,7 @@ import org.md2k.mcerebrum.commons.permission.Permission;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 
 import br.com.goncalves.pugnotification.notification.PugNotification;
 import es.dmoral.toasty.Toasty;
@@ -63,9 +65,10 @@ import es.dmoral.toasty.Toasty;
 public class ServiceBeacon extends Service  implements BeaconConsumer {
     private static final String TAG = ServiceBeacon.class.getSimpleName();
     public static final String INTENT_STOP = "stop";
+    private static final long SCAN_TIME = 2000;
+    private static final long SCAN_PERIOD=18000;
     private Devices devices;
     private DataKitAPI dataKitAPI = null;
-    private BeaconManager beaconManager;
     public static final String ACTION_LOCATION_CHANGED = "android.location.PROVIDERS_CHANGED";
 
     @Override
@@ -113,11 +116,34 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
 
         connectDataKit();
     }
-    void beaconStart(){
-        beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
+    void clearBeacon(){
+        BeaconManager beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
+        beaconManager.getBeaconParsers().clear();
+        beaconManager.removeAllRangeNotifiers();
+        try {
+            Region region=new Region("myRangingUniqueId", null, null, null);
+            beaconManager.stopRangingBeaconsInRegion(region);
+        } catch (RemoteException ignored) {
+        }
+        try {
+        beaconManager.unbind(this);
+        } catch (Exception ignored) {
+        }
+    }
+    void setBeacon(){
+        BeaconManager beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
         beaconManager.getBeaconParsers().add(new BeaconParser().
                 setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25"));
+
+        beaconManager.setBackgroundScanPeriod(SCAN_TIME);
+        beaconManager.setForegroundScanPeriod(SCAN_TIME);
+        beaconManager.setBackgroundBetweenScanPeriod(SCAN_PERIOD);
+        beaconManager.setForegroundBetweenScanPeriod(SCAN_PERIOD);
         beaconManager.bind(this);
+    }
+    void beaconStart() {
+        clearBeacon();
+        setBeacon();
     }
 
     private void connectDataKit() {
@@ -131,7 +157,6 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
                         beaconStart();
                     } catch (DataKitException e) {
                         stopSelf();
-                        e.printStackTrace();
                     }
                 }
             });
@@ -155,25 +180,23 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
     @Override
     public void onDestroy() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(mMessageReceiverStop);
-        clearDataKitSettingsBluetooth();
         try {
             unregisterReceiver(mReceiver);
-        }catch (Exception e){
+        }catch (Exception ignored){
 
         }
         try {
-            beaconManager.unbind(this);
-        }catch (Exception e){
+            clearBeacon();
+        }catch (Exception ignored){
 
         }
+        disconnectDataKit();
+
         super.onDestroy();
     }
     @Override
     public IBinder onBind(Intent intent) {
         throw new UnsupportedOperationException("Not yet implemented");
-    }
-    private void clearDataKitSettingsBluetooth() {
-        disconnectDataKit();
     }
 
 
@@ -185,24 +208,32 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
     };
     @Override
     public void onBeaconServiceConnect() {
+        BeaconManager beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
         beaconManager.addRangeNotifier(new RangeNotifier() {
             @Override
             public void didRangeBeaconsInRegion(Collection<Beacon> beacons, Region region) {
                 int flag = 0;
                 String platformId;
-                ArrayList<Beacon> list = new ArrayList(beacons);
-                for(int i=0;i<list.size();i++){
-                    String adr=list.get(i).getBluetoothAddress();
-                    double dist=list.get(i).getDistance();
-                    double rssi=list.get(i).getRssi();
-                    double tx = list.get(i).getTxPower();
-                    double[] data=new double[]{dist,rssi,tx};
-                    DataTypeDoubleArray dataTypeDoubleArray=new DataTypeDoubleArray(DateTime.getDateTime(), data);
+                Object[] list= beacons.toArray();
+                Log.d("abc","list="+beacons.size());
+
+                HashSet<String> hashSet= new HashSet<>();
+                for (Object o : list) {
+                    Beacon aList = (Beacon) o;
+                    String adr = aList.getBluetoothAddress();
+                    double dist = aList.getDistance();
+                    double rssi = aList.getRssi();
+                    double tx = aList.getTxPower();
+                    if (hashSet.contains(adr)) continue;
+                    hashSet.add(adr);
+                    double[] data = new double[]{dist, rssi, tx};
+                    DataTypeDoubleArray dataTypeDoubleArray = new DataTypeDoubleArray(DateTime.getDateTime(), data);
                     try {
-                        if(devices.find(adr)==null)
-                            platformId=adr;
-                        else platformId=devices.find(adr).getPlatformId();
-                        devices.insert(adr,dataTypeDoubleArray);
+                        if (devices.find(adr) == null)
+                            platformId = adr;
+                        else platformId = devices.find(adr).getPlatformId();
+                        devices.insert(adr, dataTypeDoubleArray);
+                        Log.d(TAG,"adr="+adr);
                         updateView(platformId, dist, rssi, tx);
                     } catch (DataKitException e) {
                         stopSelf();
@@ -212,7 +243,8 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
         });
 
         try {
-            beaconManager.startRangingBeaconsInRegion(new Region("myRangingUniqueId", null, null, null));
+            Region region=new Region("myRangingUniqueId", null, null, null);
+            beaconManager.startRangingBeaconsInRegion(region);
         } catch (RemoteException e) {
             stopSelf();
         }
@@ -223,7 +255,7 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
         intent.putExtra("distance", dist);
         intent.putExtra("rssi", rssi);
         intent.putExtra("tx", tx);
-        intent.putExtra("text",platformId+" D="+String.format("%.2f",dist)+" R="+String.format("%.0f",rssi)+" T="+String.format("%.0f",tx));
+        intent.putExtra("text",String.valueOf(DateTime.getDateTime()%(1000*60))+" "+platformId+" D="+String.format("%.2f",dist)+" R="+String.format("%.0f",rssi)+" T="+String.format("%.0f",tx));
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
 
     }
@@ -251,5 +283,4 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
             }
         }
     };
-
 }

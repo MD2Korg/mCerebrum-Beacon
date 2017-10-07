@@ -5,6 +5,7 @@ import android.os.Bundle;
 
 import org.md2k.beacon.configuration.Configuration;
 import org.md2k.mcerebrum.commons.app_info.AppInfo;
+import org.md2k.mcerebrum.commons.permission.Permission;
 import org.md2k.mcerebrum.core.access.AbstractServiceMCerebrum;
 
 public class ServiceMCerebrum extends AbstractServiceMCerebrum {
@@ -16,6 +17,7 @@ public class ServiceMCerebrum extends AbstractServiceMCerebrum {
 
     @Override
     public void initialize(Bundle bundle) {
+        if(Permission.hasPermission(this)) return;
         Intent intent=new Intent(this, ActivityPermission.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);

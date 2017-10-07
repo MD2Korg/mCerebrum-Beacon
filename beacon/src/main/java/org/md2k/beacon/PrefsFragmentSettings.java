@@ -27,6 +27,7 @@ import org.md2k.beacon.configuration.Configuration;
 import org.md2k.beacon.devices.Devices;
 import org.md2k.datakitapi.source.datasource.DataSource;
 import org.md2k.datakitapi.source.platform.PlatformType;
+import org.md2k.mcerebrum.commons.app_info.AppInfo;
 import org.md2k.mcerebrum.commons.dialog.Dialog;
 import org.md2k.mcerebrum.commons.dialog.DialogCallback;
 
@@ -67,12 +68,17 @@ import static android.R.attr.category;
 public class PrefsFragmentSettings extends PreferenceFragment  implements BeaconConsumer {
     private static final String TAG = PrefsFragmentSettings.class.getSimpleName();
     Devices devices;
-    private BeaconManager beaconManager;
     CharSequence[] entries;
+    boolean flag;
+    private static Region region=new Region("myRangingUniqueId", null, null, null);
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        flag= AppInfo.isServiceRunning(getActivity(), ServiceBeacon.class.getName());
+        if(flag) {
+            getActivity().stopService(new Intent(getActivity(), ServiceBeacon.class));
+        }
         devices = new Devices(getActivity());
         addPreferencesFromResource(R.xml.pref_settings);
         setPreferenceScreenConfigured();
@@ -103,21 +109,13 @@ public class PrefsFragmentSettings extends PreferenceFragment  implements Beacon
     }
     @Override
     public void onResume(){
-        scan();
+        beaconStart();
         super.onResume();
     }
     @Override
     public void onPause(){
-        beaconManager.unbind(this);
-        beaconManager=null;
+        clearBeacon();
         super.onPause();
-    }
-    void scan(){
-        beaconManager = BeaconManager.getInstanceForApplication(getActivity().getApplicationContext());
-        beaconManager.getBeaconParsers().add(new BeaconParser().
-                setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25"));
-        beaconManager.bind(this);
-
     }
 
     void setPreferenceScreenConfigured() {
@@ -138,7 +136,6 @@ public class PrefsFragmentSettings extends PreferenceFragment  implements Beacon
         }
     }
     void addToPreferenceScreenAvailable(String deviceId) {
-        if(beaconManager==null) return;
         final PreferenceCategory category = (PreferenceCategory) findPreference("key_device_available");
         for (int i = 0; i < category.getPreferenceCount(); i++)
             if (category.getPreference(i).getKey().equals(deviceId))
@@ -231,6 +228,10 @@ public class PrefsFragmentSettings extends PreferenceFragment  implements Beacon
     }
     @Override
     public void onDestroy() {
+        if(flag) {
+            getActivity().startService(new Intent(getActivity(), ServiceBeacon.class));
+        }
+
         super.onDestroy();
     }
     boolean inConfigured(String address){
@@ -240,6 +241,8 @@ public class PrefsFragmentSettings extends PreferenceFragment  implements Beacon
     }
     @Override
     public void onBeaconServiceConnect() {
+        BeaconManager beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
+
         beaconManager.addRangeNotifier((beacons, region) -> {
             List<Beacon> list = new ArrayList(beacons);
             for(int i=0;i<list.size();i++) {
@@ -311,5 +314,27 @@ public class PrefsFragmentSettings extends PreferenceFragment  implements Beacon
     public boolean bindService(Intent intent, ServiceConnection serviceConnection, int i) {
         return getActivity().bindService(intent, serviceConnection, i);
     }
-
+    void clearBeacon(){
+        BeaconManager beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
+        beaconManager.getBeaconParsers().clear();
+        beaconManager.removeAllRangeNotifiers();
+        try {
+            beaconManager.stopRangingBeaconsInRegion(region);
+        } catch (RemoteException ignored) {
+        }
+        try {
+            beaconManager.unbind(this);
+        } catch (Exception ignored) {
+        }
+    }
+    void setBeacon(){
+        BeaconManager beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
+        beaconManager.getBeaconParsers().add(new BeaconParser().
+                setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25"));
+        beaconManager.bind(this);
+    }
+    void beaconStart() {
+        clearBeacon();
+        setBeacon();
+    }
 }

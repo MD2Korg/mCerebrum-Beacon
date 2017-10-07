@@ -85,13 +85,17 @@ public class ActivityMain extends AppCompatActivity {
                 initializeUI();
                 break;
             case OPERATION_START_BACKGROUND:
-                intent = new Intent(ActivityMain.this, ServiceBeacon.class);
-                startService(intent);
+                if(!AppInfo.isServiceRunning(this, ServiceBeacon.class.getName())) {
+                    intent = new Intent(ActivityMain.this, ServiceBeacon.class);
+                    startService(intent);
+                }
                 finish();
                 break;
             case OPERATION_STOP_BACKGROUND:
-                intent = new Intent(ActivityMain.this, ServiceBeacon.class);
-                stopService(intent);
+                if(AppInfo.isServiceRunning(this, ServiceBeacon.class.getName())) {
+                    intent = new Intent(ActivityMain.this, ServiceBeacon.class);
+                    stopService(intent);
+                }
                 finish();
                 break;
             case OPERATION_PLOT:
@@ -150,13 +154,16 @@ public class ActivityMain extends AppCompatActivity {
         }
     };
     ArrayList<String> results=new ArrayList<>();
+    int count=0;
     private void updateTable(Intent intent) {
-        results.add(intent.getStringExtra("text"));
-        if(results.size()>10) results.remove(0);
+        count=(count+1)%1000;
+        results.add(String.format("%04d ",count)+"  "+intent.getStringExtra("text"));
+        if(results.size()>20) results.remove(0);
         TextView textView= (TextView) findViewById(R.id.textview_result);
         String f="";
-        for(int i=0;i<results.size();i++)
-            f+=results.get(i)+"\n";
+        for(int i=0;i<results.size();i++) {
+            f += results.get(i) + "\n";
+        }
         textView.setText(f.replace("\\n","\n"));
     }
     @Override
