@@ -1,6 +1,5 @@
 package org.md2k.beacon;
 
-import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -16,16 +15,11 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import org.md2k.datakitapi.time.DateTime;
-import org.md2k.mcerebrum.commons.permission.Permission;
-import org.md2k.mcerebrum.commons.permission.PermissionCallback;
 import org.md2k.mcerebrum.core.access.appinfo.AppInfo;
 
 import java.util.ArrayList;
-
-import es.dmoral.toasty.Toasty;
 
 
 /**
@@ -75,6 +69,7 @@ public class ActivityMain extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         readIntent();
         checkRequirement();
+        // Bo test
     }
 
     void load() {
