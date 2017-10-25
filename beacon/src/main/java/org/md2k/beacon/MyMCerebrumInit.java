@@ -26,22 +26,26 @@ package org.md2k.beacon;
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-import android.app.Application;
 import android.content.Context;
+import android.content.Intent;
 
+import org.md2k.beacon.configuration.Configuration;
+import org.md2k.mcerebrum.commons.permission.Permission;
 import org.md2k.mcerebrum.core.access.MCerebrum;
+import org.md2k.mcerebrum.core.access.MCerebrumInfo;
 
-public class MyApplication extends Application {
-    private static Context context;
-
+public class MyMCerebrumInit extends MCerebrumInfo {
     @Override
-    public void onCreate() {
-        super.onCreate();
-        context=this;
-        MCerebrum.init(getApplicationContext(), MyMCerebrumInit.class);
-    }
-    public static Context getContext(){
-        return context;
+    public void update(final Context context){
+        MCerebrum.setBackgroundService(context, ServiceBeacon.class);
+        MCerebrum.setConfigureActivity(context, ActivitySettings.class);
+        MCerebrum.setPermissionActivity(context, ActivityPermission.class);
+        MCerebrum.setConfigured(context, Configuration.isConfigured());
+        MCerebrum.setConfigureExact(context, Configuration.isEqualDefault());
+        if(!MCerebrum.getPermission(context)){
+            Intent intent = new Intent(context, ActivityPermission.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        }
     }
 }
-

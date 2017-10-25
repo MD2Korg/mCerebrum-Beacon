@@ -15,6 +15,7 @@ import com.google.android.gms.location.LocationSettingsStatusCodes;
 
 import org.md2k.mcerebrum.commons.permission.Permission;
 import org.md2k.mcerebrum.commons.permission.PermissionCallback;
+import org.md2k.mcerebrum.core.access.MCerebrum;
 
 import es.dmoral.toasty.Toasty;
 import pl.charmas.android.reactivelocation.ReactiveLocationProvider;
@@ -35,6 +36,7 @@ public class ActivityPermission extends AppCompatActivity {
             public void OnResponse(boolean isGranted) {
                 if (!isGranted) {
                     Toasty.error(getApplicationContext(), "!PERMISSION DENIED !!! Could not continue...", Toast.LENGTH_SHORT).show();
+                    MCerebrum.setPermission(getApplicationContext(), false);
                     finish();
                 } else {
                     enableGPS();
@@ -50,10 +52,12 @@ public class ActivityPermission extends AppCompatActivity {
 if (requestCode == REQUEST_CHECK_SETTINGS) {
             if (resultCode == Activity.RESULT_OK) {
                 // All required changes were successfully made
+                MCerebrum.setPermission(getApplicationContext(), true);
                 setResult(RESULT_OK);
                 finish();
             } else {
                 Toast.makeText(this, "!PERMISSION DENIED !!! Could not continue...", Toast.LENGTH_SHORT).show();
+                MCerebrum.setPermission(getApplicationContext(), false);
                 finish();
             }
         }
@@ -91,10 +95,12 @@ if (requestCode == REQUEST_CHECK_SETTINGS) {
                                 status.startResolutionForResult(ActivityPermission.this, REQUEST_CHECK_SETTINGS);
                             } else {
                                 setResult(RESULT_OK);
+                                MCerebrum.setPermission(getApplicationContext(), true);
                                 finish();
                             }
                         } catch (Exception e) {
                             Toast.makeText(getBaseContext(), "!PERMISSION DENIED !!! Could not continue...", Toast.LENGTH_SHORT).show();
+                            MCerebrum.setPermission(getApplicationContext(), false);
                             finish();
                         }
 

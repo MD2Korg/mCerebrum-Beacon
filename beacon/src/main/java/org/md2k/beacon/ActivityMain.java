@@ -19,9 +19,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import org.md2k.datakitapi.time.DateTime;
-import org.md2k.mcerebrum.commons.app_info.AppInfo;
 import org.md2k.mcerebrum.commons.permission.Permission;
 import org.md2k.mcerebrum.commons.permission.PermissionCallback;
+import org.md2k.mcerebrum.core.access.appinfo.AppInfo;
 
 import java.util.ArrayList;
 

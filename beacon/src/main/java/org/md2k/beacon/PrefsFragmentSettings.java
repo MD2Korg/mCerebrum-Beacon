@@ -27,9 +27,9 @@ import org.md2k.beacon.configuration.Configuration;
 import org.md2k.beacon.devices.Devices;
 import org.md2k.datakitapi.source.datasource.DataSource;
 import org.md2k.datakitapi.source.platform.PlatformType;
-import org.md2k.mcerebrum.commons.app_info.AppInfo;
 import org.md2k.mcerebrum.commons.dialog.Dialog;
 import org.md2k.mcerebrum.commons.dialog.DialogCallback;
+import org.md2k.mcerebrum.core.access.appinfo.AppInfo;
 
 import java.util.ArrayList;
 import java.util.Collection;
