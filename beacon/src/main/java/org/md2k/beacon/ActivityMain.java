@@ -52,7 +52,7 @@ import java.util.Locale;
 
 public class ActivityMain extends AppCompatActivity {
     private static final String TAG = ActivityMain.class.getSimpleName();
-    public static final String INTENT_NAME="beacon_data";
+    public static final String INTENT_NAME = "beacon_data";
 
     public static final int OPERATION_RUN = 0;
     public static final int OPERATION_SETTINGS = 1;
@@ -61,8 +61,10 @@ public class ActivityMain extends AppCompatActivity {
     public static final int OPERATION_STOP_BACKGROUND = 4;
     public static final String OPERATION = "operation";
 
-    boolean isEverythingOk = false;
-    int operation;
+    private static final int REQUEST_PERMISSION_CODE = 1111;
+
+    private boolean isEverythingOk = false;
+    private int operation;
 
     // ---- activity life cycle callbacks ----------------------------------------------------------
     @Override
@@ -163,7 +165,7 @@ public class ActivityMain extends AppCompatActivity {
 
     private void checkRequirement() {
         Intent intent = new Intent(this, ActivityPermission.class);
-        startActivityForResult(intent, 1111);
+        startActivityForResult(intent, REQUEST_PERMISSION_CODE);
     }
 
     private void load() {
