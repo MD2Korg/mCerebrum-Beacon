@@ -23,7 +23,9 @@ import rx.Observer;
 import rx.Subscription;
 
 public class ActivityPermission extends AppCompatActivity {
-    private static final int REQUEST_CHECK_SETTINGS=1121;
+
+    private static final int REQUEST_CHECK_SETTINGS = 1121;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -35,7 +37,9 @@ public class ActivityPermission extends AppCompatActivity {
             @Override
             public void OnResponse(boolean isGranted) {
                 if (!isGranted) {
-                    Toasty.error(getApplicationContext(), "!PERMISSION DENIED !!! Could not continue...", Toast.LENGTH_SHORT).show();
+                    Toasty.error(getApplicationContext(),
+                            "!PERMISSION DENIED !!! Could not continue...", Toast.LENGTH_SHORT)
+                            .show();
                     MCerebrum.setPermission(getApplicationContext(), false);
                     finish();
                 } else {
