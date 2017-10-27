@@ -2,34 +2,31 @@ package org.md2k.beacon;
 
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.RemoteException;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 import android.widget.Toast;
 
-import org.altbeacon.beacon.Beacon;
-import org.altbeacon.beacon.BeaconConsumer;
-import org.altbeacon.beacon.BeaconManager;
-import org.altbeacon.beacon.BeaconParser;
-import org.altbeacon.beacon.RangeNotifier;
-import org.altbeacon.beacon.Region;
 import org.md2k.beacon.devices.Devices;
 import org.md2k.datakitapi.DataKitAPI;
-import org.md2k.datakitapi.datatype.DataTypeDoubleArray;
 import org.md2k.datakitapi.exception.DataKitException;
 import org.md2k.datakitapi.time.DateTime;
 import org.md2k.mcerebrum.commons.permission.Permission;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 
 import br.com.goncalves.pugnotification.notification.PugNotification;
 import es.dmoral.toasty.Toasty;
@@ -62,90 +59,86 @@ import es.dmoral.toasty.Toasty;
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-public class ServiceBeacon extends Service  implements BeaconConsumer {
+public class ServiceBeacon extends Service {
+
     private static final String TAG = ServiceBeacon.class.getSimpleName();
+
     public static final String INTENT_STOP = "stop";
+
     private static final long SCAN_TIME = 2000;
-    private static final long SCAN_PERIOD=18000;
+    private static final long SCAN_PERIOD = 18000;
     private Devices devices;
     private DataKitAPI dataKitAPI = null;
+
     public static final String ACTION_LOCATION_CHANGED = "android.location.PROVIDERS_CHANGED";
 
+    private static final int NOTIFICATION_ID = 31;
+
+    private BluetoothAdapter bluetoothAdapter;
+    private BluetoothLeScanner mLEScanner;
+
+    // ---- activity life cycle callbacks ----------------------------------------------------------
     @Override
     public void onCreate() {
         super.onCreate();
-        if (Permission.hasPermission(this)) {
-            BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-            if(!mBluetoothAdapter.isEnabled())
-                mBluetoothAdapter.enable();
-            LocationManager locationManager = (LocationManager) this.getSystemService(LOCATION_SERVICE);
-            if(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                removeNotification();
-                load();
-            }
-            else {
-                Toasty.error(this, "Please turn on GPS", Toast.LENGTH_SHORT).show();
-                showNotification("Turn on GPS", "Beacon data can't be recorded. (Please click to turn on GPS)");
-                stopSelf();
-            }
-        } else {
-            Toasty.error(getApplicationContext(), "!PERMISSION is not GRANTED !!! Could not continue...", Toast.LENGTH_SHORT).show();
-            showNotification("Permission required", "Beacon app can't continue. (Please click to grant permission)");
+
+        // permission check
+        if (!Permission.hasPermission(this)) {
+            Toasty.error(getApplicationContext(),
+                    "!PERMISSION is not GRANTED !!! Could not continue...", Toast.LENGTH_SHORT
+            ).show();
+
+            showNotification(
+                    "Permission required",
+                    "Beacon app can't continue. (Please click to grant permission)"
+            );
+
             stopSelf();
         }
-    }
-    private void showNotification(String title, String message) {
-        Bundle bundle = new Bundle();
-        bundle.putInt(ActivityMain.OPERATION, ActivityMain.OPERATION_START_BACKGROUND);
-        PugNotification.with(this).load().identifier(31).title(title).smallIcon(R.mipmap.ic_launcher)
-                .message(message).autoCancel(true).click(ActivityMain.class,bundle).simple().build();
-    }
-    private void removeNotification() {
-        PugNotification.with(this).cancel(31);
+
+        // enable bluetooth
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (!bluetoothAdapter.isEnabled())
+            bluetoothAdapter.enable();
+
+        load();
     }
 
-    void load() {
+    @Override
+    public void onDestroy() {
+        //TODO: what's the difference between the following two ways to unregister receivers?
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(mMessageReceiverStop);
+        try {
+            unregisterReceiver(mReceiver);
+        } catch (Exception ignored) {}
+
+        disconnectDataKit();
+
+        super.onDestroy();
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        throw new UnsupportedOperationException("Not yet implemented");
+    }
+
+    // ---- service initialization -----------------------------------------------------------------
+    private void load() {
+        removeNotification();
+
         IntentFilter filter = new IntentFilter();
         filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
         filter.addAction(ACTION_LOCATION_CHANGED);
         registerReceiver(mReceiver, filter);
 
-        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(mMessageReceiverStop,
-                new IntentFilter(INTENT_STOP));
+        LocalBroadcastManager.getInstance(getApplicationContext())
+                .registerReceiver(mMessageReceiverStop, new IntentFilter(INTENT_STOP));
         devices = new Devices(getApplicationContext());
 
         connectDataKit();
     }
-    void clearBeacon(){
-        BeaconManager beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
-        beaconManager.getBeaconParsers().clear();
-        beaconManager.removeAllRangeNotifiers();
-        try {
-            Region region=new Region("myRangingUniqueId", null, null, null);
-            beaconManager.stopRangingBeaconsInRegion(region);
-        } catch (RemoteException ignored) {
-        }
-        try {
-        beaconManager.unbind(this);
-        } catch (Exception ignored) {
-        }
-    }
-    void setBeacon(){
-        BeaconManager beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
-        beaconManager.getBeaconParsers().add(new BeaconParser().
-                setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25"));
 
-        beaconManager.setBackgroundScanPeriod(SCAN_TIME);
-        beaconManager.setForegroundScanPeriod(SCAN_TIME);
-        beaconManager.setBackgroundBetweenScanPeriod(SCAN_PERIOD);
-        beaconManager.setForegroundBetweenScanPeriod(SCAN_PERIOD);
-        beaconManager.bind(this);
-    }
-    void beaconStart() {
-        clearBeacon();
-        setBeacon();
-    }
-
+    // ---- DataKit connection ---------------------------------------------------------------------
     private void connectDataKit() {
         dataKitAPI = DataKitAPI.getInstance(getApplicationContext());
         try {
@@ -166,121 +159,134 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
     }
 
     private void disconnectDataKit() {
-        if (devices != null)
+        if (devices != null) {
             try {
                 devices.unregister();
             } catch (DataKitException e) {
                 e.printStackTrace();
             }
+        }
+
         if (dataKitAPI != null) {
             dataKitAPI.disconnect();
+            dataKitAPI = null;
         }
+
+        beaconStop();
     }
 
-    @Override
-    public void onDestroy() {
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(mMessageReceiverStop);
-        try {
-            unregisterReceiver(mReceiver);
-        }catch (Exception ignored){
+    // ---- Bluetooth LE callback ------------------------------------------------------------------
+    private void beaconStart() {
+        final BluetoothManager bluetoothManager =
+                (BluetoothManager) this.getApplicationContext().getSystemService(
+                        Context.BLUETOOTH_SERVICE);
+        bluetoothAdapter = bluetoothManager.getAdapter();
+        mLEScanner = bluetoothAdapter.getBluetoothLeScanner();
 
-        }
-        try {
-            clearBeacon();
-        }catch (Exception ignored){
+        ScanSettings settings = new ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build();
+        List<ScanFilter> filters = new ArrayList<>();
 
-        }
-        disconnectDataKit();
-
-        super.onDestroy();
-    }
-    @Override
-    public IBinder onBind(Intent intent) {
-        throw new UnsupportedOperationException("Not yet implemented");
+        mLEScanner.startScan(filters, settings, mLEScanCallback);
     }
 
+    private void beaconStop() {
+        mLEScanner.stopScan(mLEScanCallback);
+    }
 
+    private ScanCallback mLEScanCallback = new ScanCallback() {
+        @Override
+        public void onScanResult(int callbackType, ScanResult result) {
+            Log.i("callbackType", String.valueOf(callbackType));
+            Log.i("result", result.toString());
+            parseLEScanResult(result);
+        }
+
+        @Override
+        public void onBatchScanResults(List<ScanResult> results) {
+            for (ScanResult result : results) {
+                Log.i("ScanResult - Results", result.toString());
+                parseLEScanResult(result);
+            }
+        }
+
+        @Override
+        public void onScanFailed(int errorCode) {
+            Log.e("Scan Failed", "Error Code: " + errorCode);
+        }
+    };
+
+    private void parseLEScanResult(ScanResult scanResult) {
+        String address = scanResult.getDevice().getAddress();
+        int rssi = scanResult.getRssi();
+        byte[] data = scanResult.getScanRecord().getBytes();
+        updateView(address, rssi);
+        //TODO: Monowar, do I need to write the data back to DataKit/DataSource?
+    }
+
+    // ---- update view ----------------------------------------------------------------------------
+    private void updateView(String platformId, int rssi) {
+        Intent intent = new Intent(ActivityMain.INTENT_NAME);
+        String text = String.format(Locale.US, "%d %s R=%d",
+                DateTime.getDateTime() % (1000L * 60),  // second of the minute
+                platformId, rssi);
+        intent.putExtra("platform_id", platformId)
+            .putExtra("rssi", rssi)
+            .putExtra("text", text);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+    }
+
+    // ---- broadcast receivers --------------------------------------------------------------------
     private BroadcastReceiver mMessageReceiverStop = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             stopSelf();
         }
     };
-    @Override
-    public void onBeaconServiceConnect() {
-        BeaconManager beaconManager = BeaconManager.getInstanceForApplication(this.getApplicationContext());
-        beaconManager.addRangeNotifier(new RangeNotifier() {
-            @Override
-            public void didRangeBeaconsInRegion(Collection<Beacon> beacons, Region region) {
-                int flag = 0;
-                String platformId;
-                Object[] list= beacons.toArray();
-                Log.d("abc","list="+beacons.size());
 
-                HashSet<String> hashSet= new HashSet<>();
-                for (Object o : list) {
-                    Beacon aList = (Beacon) o;
-                    String adr = aList.getBluetoothAddress();
-                    double dist = aList.getDistance();
-                    double rssi = aList.getRssi();
-                    double tx = aList.getTxPower();
-                    if (hashSet.contains(adr)) continue;
-                    hashSet.add(adr);
-                    double[] data = new double[]{dist, rssi, tx};
-                    DataTypeDoubleArray dataTypeDoubleArray = new DataTypeDoubleArray(DateTime.getDateTime(), data);
-                    try {
-                        if (devices.find(adr) == null)
-                            platformId = adr;
-                        else platformId = devices.find(adr).getPlatformId();
-                        devices.insert(adr, dataTypeDoubleArray);
-                        Log.d(TAG,"adr="+adr);
-                        updateView(platformId, dist, rssi, tx);
-                    } catch (DataKitException e) {
-                        stopSelf();
-                    }
-                }
-            }
-        });
-
-        try {
-            Region region=new Region("myRangingUniqueId", null, null, null);
-            beaconManager.startRangingBeaconsInRegion(region);
-        } catch (RemoteException e) {
-            stopSelf();
-        }
-    }
-    private void updateView(String platformId, double dist, double rssi, double tx) {
-        Intent intent = new Intent(ActivityMain.INTENT_NAME);
-        intent.putExtra("platform_id", platformId);
-        intent.putExtra("distance", dist);
-        intent.putExtra("rssi", rssi);
-        intent.putExtra("tx", tx);
-        intent.putExtra("text",String.valueOf(DateTime.getDateTime()%(1000*60))+" "+platformId+" D="+String.format("%.2f",dist)+" R="+String.format("%.0f",rssi)+" T="+String.format("%.0f",tx));
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-
-    }
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
             if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
-                final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+                final int state = intent.getIntExtra(
+                        BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
                 switch (state) {
                     case BluetoothAdapter.STATE_OFF:
                     case BluetoothAdapter.STATE_TURNING_OFF:
-                        Toasty.error(ServiceBeacon.this, "Bluetooth is off. Please turn on bluetooth", Toast.LENGTH_SHORT).show();
-                        showNotification("Turn on Bluetooth", "Beacon data con't be recorded. Please click to turn on bluetooth");
+                        Toasty.error(ServiceBeacon.this,
+                                "Bluetooth is off. Please turn on bluetooth", Toast.LENGTH_SHORT)
+                                .show();
+
+                        showNotification(
+                                "Turn on Bluetooth",
+                                "Beacon data con't be recorded. Please click to turn on bluetooth"
+                        );
                         stopSelf();
-                }
-            } else if (action.equals(ACTION_LOCATION_CHANGED)) {
-                LocationManager locationManager = (LocationManager) context.getSystemService(LOCATION_SERVICE);
-                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                } else {
-                    Toasty.error(context, "Please turn on GPS", Toast.LENGTH_SHORT).show();
-                    showNotification("Turn on GPS", "Beacon data can't be recorded. (Please click to turn on GPS)");
-                    stopSelf();
                 }
             }
         }
     };
+
+    // ---- notification helpers -------------------------------------------------------------------
+    private void showNotification(String title, String message) {
+        Bundle bundle = new Bundle();
+        bundle.putInt(ActivityMain.OPERATION, ActivityMain.OPERATION_START_BACKGROUND);
+        PugNotification.with(this)
+                .load()
+                .identifier(NOTIFICATION_ID)
+                .title(title)
+                .smallIcon(R.mipmap.ic_launcher)
+                .message(message)
+                .autoCancel(true)
+                .click(ActivityMain.class, bundle)
+                .simple()
+                .build();
+    }
+
+    private void removeNotification() {
+        PugNotification.with(this).cancel(NOTIFICATION_ID);
+    }
+
 }
