@@ -84,7 +84,6 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
                 load();
             }
             else {
-                Toasty.error(this, "Please turn on GPS", Toast.LENGTH_SHORT).show();
                 showNotification("Turn on GPS", "Beacon data can't be recorded. (Please click to turn on GPS)");
                 stopSelf();
             }
@@ -170,7 +169,6 @@ public class ServiceBeacon extends Service  implements BeaconConsumer {
             try {
                 devices.unregister();
             } catch (DataKitException e) {
-                e.printStackTrace();
             }
         if (dataKitAPI != null) {
             dataKitAPI.disconnect();
